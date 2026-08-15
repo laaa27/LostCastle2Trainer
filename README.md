@@ -25,23 +25,13 @@
 ## 环境要求
 
 - Windows
-- [Node.js](https://nodejs.org/) 18+
+- [Node.js](压缩包内自带 无需下载) 18+
 - 《失落城堡2》游戏本体
 
 ## 使用步骤
 
 ```bash
-# 1. 安装依赖
-npm install
-
-# 2. 编译 agent（frida-compile: src/agent.ts -> dist/agent.js）
-npm run build
-
-# 3. 启动游戏并进入营地/存档界面
-
-# 4. 运行修改器（自动附加游戏进程并打开浏览器面板）
-npm run run
-# 或直接双击「启动修改器.bat」（若 dist 缺失会自动构建）
+# 直接双击「启动修改器.bat」（若 dist 缺失会自动构建）
 ```
 
 浏览器会自动打开面板 `http://127.0.0.1:8899`（端口被占时自动回退 8899 → 9599 → 9800 → 随机）。
