@@ -1,0 +1,17 @@
+{
+  "name": "lostcastle2trainer",
+  "version": "1.0.0",
+  "description": "失落城堡2 单机修改器 (Frida 注入 + 本地网页面板)",
+  "main": "host.js",
+  "scripts": {
+    "build": "frida-compile src/agent.ts -o dist/agent.js",
+    "run": "node host.js"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "frida": "^17.16.4",
+    "frida-compile": "^19.0.5",
+    "frida-il2cpp-bridge": "^0.13.1"
+  }
+}

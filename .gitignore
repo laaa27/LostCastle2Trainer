@@ -1,0 +1,21 @@
+# Node
+node_modules/
+dist/
+
+# Build artifacts
+*.obj
+*.o
+*.pdb
+*.dll
+dll/bin/
+dll/.vs/
+
+# Logs
+*.log
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.reasonix/
