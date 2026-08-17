@@ -31,17 +31,9 @@
 ## 使用步骤
 
 ```bash
-# 1. 安装依赖（仅首次，或直接双击 exe 由面板自动完成）
-npm install
-
-# 2. 编译 agent（frida-compile: src/agent.ts -> dist/agent.js）与原生面板
-npm run build
-powershell -ExecutionPolicy Bypass -File winui\build-ui.ps1
-
-# 3. 启动游戏（推荐无边框窗口化）并进入营地/存档界面
-
-# 4. 运行修改器
-#    直接双击 winui\WinPanel.exe 即可（无需任何命令行）。
+# 1. 下载源码
+# 2. 启动游戏（推荐无边框窗口化）并进入营地/存档界面
+# 3. 双击 winui\WinPanel.exe 即可运行
 #    面板会自举：缺 node_modules 自动 npm install、缺 dist 自动编译，
 #    随后自动拉起 host.js 连接游戏并打开窗口。
 ```
