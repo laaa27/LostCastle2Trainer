@@ -15,29 +15,62 @@ static class WinPanel
     {
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        try { EnsureEnvironment(); }
-        catch (Exception ex)
+
+        // 单实例保护: 已有实例则激活其窗口后退出, 避免第二个实例抢占热键而静默失效
+        bool createdNew;
+        using (var mutex = new Mutex(true, "LostCastle2TrainerPanel", out createdNew))
         {
-            MessageBox.Show("环境准备失败: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return 1;
-        }
-        int port;
-        try { port = new HostPoller().EnsureHost(); }
-        catch (Exception ex)
-        {
-            try
+            if (!createdNew)
             {
-                File.AppendAllText(
-                    Path.Combine(Path.GetTempPath(), "winpanel_err.log"),
-                    DateTime.Now.ToString("HH:mm:ss") + " " + ex + Environment.NewLine);
+                ActivateExisting();
+                return 0;
             }
-            catch { }
-            MessageBox.Show("无法启动 host.js: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return 1;
+            try { EnsureEnvironment(); }
+            catch (Exception ex)
+            {
+                MessageBox.Show("环境准备失败: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return 1;
+            }
+            int port;
+            try { port = new HostPoller().EnsureHost(); }
+            catch (Exception ex)
+            {
+                try
+                {
+                    File.AppendAllText(
+                        Path.Combine(Path.GetTempPath(), "winpanel_err.log"),
+                        DateTime.Now.ToString("HH:mm:ss") + " " + ex + Environment.NewLine);
+                }
+                catch { }
+                MessageBox.Show("无法启动 host.js: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return 1;
+            }
+            Application.Run(new MainForm(port));
         }
-        Application.Run(new MainForm(port));
         return 0;
     }
+
+// 让已运行实例的面板窗口显示并置前 (用户重复双击 exe 时只弹出一个面板)
+    static void ActivateExisting()
+    {
+        try
+        {
+            foreach (Process p in Process.GetProcessesByName("WinPanel"))
+            {
+                if (p.Id == Process.GetCurrentProcess().Id) continue;
+                if (p.MainWindowHandle == IntPtr.Zero) continue;
+                ShowWindow(p.MainWindowHandle, 5); // SW_SHOW
+                SetForegroundWindow(p.MainWindowHandle);
+                break;
+            }
+        }
+        catch { }
+    }
+
+    [DllImport("user32.dll")]
+    static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")]
+    static extern bool SetForegroundWindow(IntPtr hWnd);
 
     // 自举: 确保 node / node_modules / dist\agent.js 就绪 (相当于旧 start-trainer.bat 的作用)
     static void EnsureEnvironment()
@@ -297,7 +330,12 @@ class MainForm : Form
         TopMost = true;
         // 去掉标题栏的最小化/最大化/关闭按钮: 只能用快捷键呼出/隐藏
         ControlBox = false;
-        RegisterHotKey(Handle, HotKeyId, 0, VK_OEM3);
+        if (!RegisterHotKey(Handle, HotKeyId, 0, VK_OEM3))
+        {
+            string msg = "注册全局热键 (反引号键 `) 失败。可能是其他程序占用了该快捷键，或权限不足。\n\n修改器窗口仍可使用，但无法用 ` 键呼出/隐藏。";
+            try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winpanel_err.log"), DateTime.Now.ToString("HH:mm:ss") + " RegisterHotKey 失败" + Environment.NewLine); } catch { }
+            MessageBox.Show(msg, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
 
         _tabs.Dock = DockStyle.Fill;
         Controls.Add(_tabs);
