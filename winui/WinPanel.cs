@@ -116,11 +116,27 @@ static class WinPanel
         }
     }
 
+    // release 包内便携 node 优先 (node\node.exe), 否则回退系统 PATH 上的 node
+    public static string ResolveNodeExe()
+    {
+        string root = Directory.GetParent(Directory.GetParent(Application.ExecutablePath).FullName).FullName;
+        string bundled = Path.Combine(root, "node", "node.exe");
+        if (File.Exists(bundled)) return bundled;
+        return "node";
+    }
+
+    static string ResolveNodeDir()
+    {
+        string root = Directory.GetParent(Directory.GetParent(Application.ExecutablePath).FullName).FullName;
+        string dir = Path.Combine(root, "node");
+        return Directory.Exists(dir) ? dir : null;
+    }
+
     static bool NodeAvailable(string root)
     {
         try
         {
-            var psi = new ProcessStartInfo("node", "--version")
+            var psi = new ProcessStartInfo(ResolveNodeExe(), "--version")
             {
                 WorkingDirectory = root,
                 UseShellExecute = false,
@@ -147,6 +163,10 @@ static class WinPanel
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+        // 包内便携 node: 把 node 目录前置到 PATH, 让 npm/npx 也能找到
+        string nodeDir = ResolveNodeDir();
+        if (nodeDir != null)
+            psi.EnvironmentVariables["PATH"] = nodeDir + ";" + Environment.GetEnvironmentVariable("PATH");
         using (var p = Process.Start(psi))
         {
             p.OutputDataReceived += (s, e) => LogCmd(e.Data);
@@ -215,7 +235,7 @@ class HostPoller
         Process proc = null;
         try
         {
-            var psi = new ProcessStartInfo("node", hostJs)
+            var psi = new ProcessStartInfo(WinPanel.ResolveNodeExe(), hostJs)
             {
                 WorkingDirectory = root,
                 UseShellExecute = false,
