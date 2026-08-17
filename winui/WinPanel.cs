@@ -19,6 +19,13 @@ static class WinPanel
         try { port = new HostPoller().EnsureHost(); }
         catch (Exception ex)
         {
+            try
+            {
+                File.AppendAllText(
+                    Path.Combine(Path.GetTempPath(), "winpanel_err.log"),
+                    DateTime.Now.ToString("HH:mm:ss") + " " + ex + Environment.NewLine);
+            }
+            catch { }
             MessageBox.Show("无法启动 host.js: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
@@ -35,13 +42,37 @@ class HostPoller
     {
         int p = Probe();
         if (p > 0) return p;
-        // exe 位于 winui\ 下, host.js 在仓库根 (winui 的父目录)
-        string root = Directory.GetParent(Application.ExecutablePath).FullName;
-        var psi = new ProcessStartInfo("node", "host.js")
+        // exe 位于 winui\ 下, host.js 在仓库根 (winui 的上一级)
+        string root = Directory.GetParent(Directory.GetParent(Application.ExecutablePath).FullName).FullName;
+        string hostJs = Path.Combine(root, "host.js");
+        Process proc = null;
+        try
         {
-            WorkingDirectory = root
-        };
-        using (var proc = Process.Start(psi))
+            var psi = new ProcessStartInfo("node", hostJs)
+            {
+                WorkingDirectory = root,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            proc = Process.Start(psi);
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+            proc.OutputDataReceived += delegate (object s, DataReceivedEventArgs a)
+            {
+                if (a.Data != null) try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winpanel_host_out.log"), a.Data + Environment.NewLine); } catch { }
+            };
+            proc.ErrorDataReceived += delegate (object s, DataReceivedEventArgs a)
+            {
+                if (a.Data != null) try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winpanel_host_err.log"), a.Data + Environment.NewLine); } catch { }
+            };
+        }
+        catch (Exception e)
+        {
+            try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winpanel_err.log"), DateTime.Now.ToString("HH:mm:ss") + " [ProcessStart] " + e + Environment.NewLine); } catch { }
+        }
+        if (proc != null)
         {
             DateTime deadline = DateTime.Now.AddSeconds(30);
             while (DateTime.Now < deadline)
@@ -77,7 +108,7 @@ class MainForm : Form
 {
     const int WM_HOTKEY = 0x0312;
     const int HotKeyId = 1;
-    const int VK_F12 = 0x7B;
+    const int VK_OEM3 = 0xC0; // 反引号 ` 键
 
     readonly int _port;
     readonly TabControl _tabs = new TabControl();
@@ -91,7 +122,7 @@ class MainForm : Form
         ClientSize = new Size(520, 560);
         MinimumSize = new Size(420, 400);
         TopMost = true;
-        RegisterHotKey(Handle, HotKeyId, 0, VK_F12);
+        RegisterHotKey(Handle, HotKeyId, 0, VK_OEM3);
 
         _tabs.Dock = DockStyle.Fill;
         Controls.Add(_tabs);
