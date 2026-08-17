@@ -7,8 +7,8 @@ dist/
 *.o
 *.pdb
 *.dll
-dll/bin/
-dll/.vs/
+*.exe
+winui/bin/
 
 # Logs
 *.log
