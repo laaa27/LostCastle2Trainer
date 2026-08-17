@@ -31,24 +31,34 @@
 ## 使用步骤
 
 ```bash
-#
-运行游戏
-选择存档后到营火旁
-下载release后解压
-直接双击「启动修改器.bat」
-enjoy
+# 1. 安装依赖（仅首次，或直接双击 exe 由面板自动完成）
+npm install
+
+# 2. 编译 agent（frida-compile: src/agent.ts -> dist/agent.js）与原生面板
+npm run build
+powershell -ExecutionPolicy Bypass -File winui\build-ui.ps1
+
+# 3. 启动游戏（推荐无边框窗口化）并进入营地/存档界面
+
+# 4. 运行修改器（自动附加游戏进程并弹出原生面板窗口）
+#    直接双击「启动修改器.bat」即可（面板自举，无需手动装依赖/编译）
 ```
 
-浏览器会自动打开面板 `http://127.0.0.1:8899`（端口被占时自动回退 8899 → 9599 → 9800 → 随机）。
+面板为 **Windows 原生窗口**（非浏览器），游戏中按 **F12** 随时呼出 / 收起（置顶显示）。
+资源 / 物品 / 属性三个标签页对应全部功能；面板启动时会自动拉起 host.js 连接游戏进程。
+
+> 独占全屏模式下外部窗口会被游戏压住，请使用无边框窗口化运行游戏。
 
 ## 项目结构
 
 ```
 src/agent.ts            # 核心: Frida 注入 agent (IL2CPP 操作 + 多版本探测层)
-host.js                 # 本地 HTTP 宿主 + 网页面板
-run-trainer.ps1         # 启动脚本 (host.js + 日志输出到 trainer.log)
+host.js                 # 本地 HTTP 宿主 (附加游戏 + 提供面板 API)
+winui/WinPanel.cs       # C# 原生窗口面板 (WinForms, F12 全局热键 + 自动托管 host)
+winui/build-ui.ps1      # 面板构建脚本 (系统自带 csc.exe, 零额外安装)
 启动修改器.bat          # 一键启动入口
 diag.js                 # 独立诊断/验证脚本 (attach -> 各 RPC -> 干净 detach)
+run-trainer.ps1         # 旧浏览器面板启动脚本 (host.js + 日志) 
 ```
 
 ## 技术栈
