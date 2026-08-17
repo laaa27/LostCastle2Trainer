@@ -46,6 +46,37 @@
 
 > 独占全屏模式下外部窗口会被游戏压住，请使用无边框窗口化运行游戏。
 
+## 从源码构建
+
+Release 压缩包已内置环境直接可用；若从 GitHub 源码自行构建，需先安装 [Node.js](https://nodejs.org/) 18+（Windows 版）。
+
+```powershell
+# 1. 克隆源码
+git clone https://github.com/laaa27/LostCastle2Trainer.git
+cd LostCastle2Trainer
+
+# 2. 安装依赖（约 120MB，含 frida 原生绑定）
+npm install
+
+# 3. 编译注入 agent（frida-compile: src/agent.ts -> dist/agent.js）
+npm run build
+
+# 4. 编译原生窗口面板（系统自带 csc.exe，不需要 Visual Studio）
+powershell -ExecutionPolicy Bypass -File winui\build-ui.ps1
+
+# 5. 启动游戏并进入营地/存档界面后，双击 winui\WinPanel.exe 运行
+```
+
+构建产物：
+
+- `winui\WinPanel.exe` — 原生面板，双击启动，自动拉起 host.js 连接游戏
+- `dist\agent.js` — Frida 注入脚本（由 `src\agent.ts` 编译）
+
+> 面板具备自举能力：启动时会自动检查依赖与编译产物，缺失则自动 `npm install` / `npm run build`。
+> 所以最小构建只需 `npm install` + `npm run build`，面板 exe 由 `build-ui.ps1` 编译一次即可长期使用。
+
+发布新版本时，用 `winui\package-release.ps1` 一键打包免环境压缩包（自动下载官方便携 node 并整合 node_modules 等全部运行文件）。
+
 ## 项目结构
 
 ```
