@@ -147,6 +147,7 @@ class HostPoller
 {
     static readonly int[] Ports = { 8899, 9599, 9800 };
     static Process _ownedProc = null;
+    static readonly System.Collections.Generic.List<string> _hostLines = new System.Collections.Generic.List<string>();
 
     public static void StopHost()
     {
@@ -182,7 +183,11 @@ class HostPoller
             proc.BeginErrorReadLine();
             proc.OutputDataReceived += delegate (object s, DataReceivedEventArgs a)
             {
-                if (a.Data != null) try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winpanel_host_out.log"), a.Data + Environment.NewLine); } catch { }
+                if (a.Data != null)
+                {
+                    lock (_hostLines) _hostLines.Add(a.Data);
+                    try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winpanel_host_out.log"), a.Data + Environment.NewLine); } catch { }
+                }
             };
             proc.ErrorDataReceived += delegate (object s, DataReceivedEventArgs a)
             {
@@ -201,27 +206,71 @@ class HostPoller
                 Thread.Sleep(500);
                 p = Probe();
                 if (p > 0) return p;
+                // host 若落到随机端口, 从输出日志解析实际端口
+                int discovered = ProbeDiscovered();
+                if (discovered > 0) return discovered;
             }
         }
         throw new Exception("host.js 30s 内未就绪");
+    }
+
+    // 从 host 的 stdout 里解析 "http://127.0.0.1:<port>" 实际监听端口并探测
+    int ProbeDiscovered()
+    {
+        string[] lines;
+        lock (_hostLines) lines = _hostLines.ToArray();
+        foreach (string line in lines)
+        {
+            int idx = line.IndexOf("127.0.0.1:", StringComparison.Ordinal);
+            if (idx < 0) continue;
+            int s = idx + "127.0.0.1:".Length;
+            int e = s;
+            while (e < line.Length && char.IsDigit(line[e])) e++;
+            if (e <= s) continue;
+            int port;
+            if (!int.TryParse(line.Substring(s, e - s), out port) || port <= 0 || port > 65535) continue;
+            if (TryPort(port) > 0) return port;
+        }
+        return -1;
     }
 
     int Probe()
     {
         foreach (int port in Ports)
         {
-            try
-            {
-                using (var wc = new WebClient())
-                {
-                    wc.Encoding = Encoding.UTF8;
-                    string s = wc.DownloadString("http://127.0.0.1:" + port + "/api/values");
-                    if (s != null) return port;
-                }
-            }
-            catch { }
+            int hit = TryPort(port);
+            if (hit > 0) return hit;
         }
         return -1;
+    }
+
+    int TryPort(int port)
+    {
+        try
+        {
+            using (var wc = new TimedWebClient(1500)) // 非我方监听者不响应时快速跳过, 避免卡住
+            {
+                wc.Encoding = Encoding.UTF8;
+                string s = wc.DownloadString("http://127.0.0.1:" + port + "/api/values");
+                // 仅当响应当真是本修改器的 host (JSON 含 name 字段) 才接受该端口
+                if (s != null && s.Contains("name")) return port;
+            }
+        }
+        catch { }
+        return -1;
+    }
+}
+
+// WebClient 无 Timeout 属性, 子类化以设置请求超时 (避免 host 无响应时 UI 卡死)
+class TimedWebClient : WebClient
+{
+    readonly int _ms;
+    public TimedWebClient(int ms) { _ms = ms; }
+    protected override WebRequest GetWebRequest(Uri address)
+    {
+        WebRequest wr = base.GetWebRequest(address);
+        if (wr != null) wr.Timeout = _ms;
+        return wr;
     }
 }
 
@@ -279,7 +328,7 @@ class MainForm : Form
     // ---------- HTTP 辅助 ----------
     string GetJson(string path)
     {
-        using (var wc = new WebClient())
+        using (var wc = new TimedWebClient(5000))
         {
             wc.Encoding = Encoding.UTF8;
             return wc.DownloadString("http://127.0.0.1:" + _port + path);
@@ -287,7 +336,7 @@ class MainForm : Form
     }
     string PostJson(string path, string json)
     {
-        using (var wc = new WebClient())
+        using (var wc = new TimedWebClient(5000))
         {
             wc.Encoding = Encoding.UTF8;
             wc.Headers[HttpRequestHeader.ContentType] = "application/json";

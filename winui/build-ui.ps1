@@ -11,7 +11,7 @@ $cscArgs = @(
   "/r:System.dll", "/r:System.Core.dll",
   "/r:System.Drawing.dll", "/r:System.Windows.Forms.dll",
   "/r:System.Net.Http.dll",
-  ("`"" + $src + "`"")
+  $src
 )
 & $csc @cscArgs 2>&1 | Out-Host
 if ($LASTEXITCODE -ne 0) { Write-Error "编译失败 (exit $LASTEXITCODE)"; exit 1 }
