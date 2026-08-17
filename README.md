@@ -25,17 +25,17 @@
 ## 环境要求
 
 - Windows
-- [Node.js](压缩包内自带 无需下载) 18+
 - 《失落城堡2》游戏本体
+- （Release 压缩包内置 Node.js；从源码构建才需自行安装 Node.js 18+）
 
 ## 使用步骤
 
 ```bash
-# 1. 下载源码
-# 2. 启动游戏（推荐无边框窗口化）并进入营地/存档界面
-# 3. 双击 winui\WinPanel.exe 即可运行
-#    面板会自举：缺 node_modules 自动 npm install、缺 dist 自动编译，
-#    随后自动拉起 host.js 连接游戏并打开窗口。
+# 1. 下载源码 / Release 压缩包（Release 包已内置 Node.js，无需安装任何环境）
+# 2. 解压
+# 3. 启动游戏（推荐无边框窗口化）并进入营地/存档界面
+# 4. 双击 winui\WinPanel.exe 即可运行
+#    面板优先使用包内便携 node，零配置启动
 ```
 
 面板为 **Windows 原生窗口**（非浏览器），游戏中按 **\` 反引号键** 随时呼出 / 收起（置顶显示）。
@@ -52,8 +52,9 @@
 src/agent.ts            # 核心: Frida 注入 agent (IL2CPP 操作 + 多版本探测层)
 host.js                 # 本地 HTTP 宿主 (附加游戏 + 提供面板 API)
 winui/WinPanel.cs       # C# 原生窗口面板 (WinForms, ` 键全局热键 + 自动托管 host + 环境自举)
-winui/WinPanel.exe      # 编译产物: 直接双击启动修改器
+winui/WinPanel.exe      # 编译产物: 直接双击启动修改器 (优先用包内便携 node)
 winui/build-ui.ps1      # 面板构建脚本 (系统自带 csc.exe, 零额外安装)
+winui/package-release.ps1  # 一键打包免环境 Release zip (内置便携 node + node_modules)
 diag.js                 # 独立诊断/验证脚本 (attach -> 各 RPC -> 干净 detach)
 run-trainer.ps1         # 旧浏览器面板启动脚本 (host.js + 日志)
 ```
