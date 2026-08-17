@@ -37,6 +37,17 @@ static class WinPanel
 class HostPoller
 {
     static readonly int[] Ports = { 8899, 9599, 9800 };
+    static Process _ownedProc = null;
+
+    public static void StopHost()
+    {
+        Process p = _ownedProc;
+        if (p != null && !p.HasExited)
+        {
+            try { p.Kill(); } catch { }
+            try { p.WaitForExit(2000); } catch { }
+        }
+    }
 
     public int EnsureHost()
     {
@@ -57,6 +68,7 @@ class HostPoller
                 CreateNoWindow = true
             };
             proc = Process.Start(psi);
+            _ownedProc = proc;
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
             proc.OutputDataReceived += delegate (object s, DataReceivedEventArgs a)
@@ -110,6 +122,8 @@ class MainForm : Form
     const int HotKeyId = 1;
     const int VK_OEM3 = 0xC0; // 反引号 ` 键
 
+    bool _allowExit = false;
+
     readonly int _port;
     readonly TabControl _tabs = new TabControl();
     readonly TableLayoutPanel _resTable = new TableLayoutPanel();
@@ -119,13 +133,24 @@ class MainForm : Form
         _port = port;
         Text = "失落城堡2 修改器";
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(520, 560);
-        MinimumSize = new Size(420, 400);
+        ClientSize = new Size(540, 560);
+        MinimumSize = new Size(520, 400);
         TopMost = true;
+        // 去掉标题栏的最小化/最大化/关闭按钮: 只能用快捷键呼出/隐藏
+        ControlBox = false;
         RegisterHotKey(Handle, HotKeyId, 0, VK_OEM3);
 
         _tabs.Dock = DockStyle.Fill;
         Controls.Add(_tabs);
+
+        var closeBtn = new Button
+        {
+            Text = "关闭修改器",
+            Dock = DockStyle.Bottom,
+            Height = 32
+        };
+        closeBtn.Click += (s, e) => CloseTrainer();
+        Controls.Add(closeBtn);
 
         BuildResTab();
         BuildItemTab();
@@ -133,6 +158,13 @@ class MainForm : Form
 
         RefreshValues();
         RefreshStats();
+    }
+
+    void CloseTrainer()
+    {
+        _allowExit = true;
+        HostPoller.StopHost();
+        Close();
     }
 
     // ---------- HTTP 辅助 ----------
@@ -309,29 +341,38 @@ class MainForm : Form
         var tab = new TabPage("物品");
         tab.Padding = new Padding(8);
 
-        var search = new TextBox { Width = 220, Top = 8, Left = 8 };
+        // 顶部操作栏: 搜索框 + 刷新 + 数量 + 添加按钮 (FlowLayout 自动换行, 永不裁剪)
+        var top = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 40,
+            AutoScroll = false,
+            WrapContents = false,
+            Padding = new Padding(0, 4, 0, 4)
+        };
+
+        var search = new TextBox { Width = 200, Margin = new Padding(0, 0, 8, 0) };
         _itemSearch = search;
         search.TextChanged += (s, e) => ApplyFilter();
-        var refreshBtn = new Button { Text = "刷新物品", Width = 80, Top = 8, Left = 236 };
+
+        var refreshBtn = new Button { Text = "刷新物品", Width = 90, Margin = new Padding(0, 0, 8, 0) };
         refreshBtn.Click += (s, e) => RefreshItems();
 
-        _itemList.Left = 8;
-        _itemList.Top = 40;
-        _itemList.Width = 340;
-        _itemList.Height = 300;
-        _itemList.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+        var qty = new NumericUpDown { Width = 70, Minimum = 1, Maximum = 99, Value = 1, Margin = new Padding(0, 0, 8, 0) };
 
-        var qty = new NumericUpDown { Left = 360, Top = 40, Width = 80, Minimum = 1, Maximum = 99, Value = 1 };
-        qty.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        var spawnBtn = new Button { Text = "生成掉落", Left = 360, Top = 70, Width = 80 };
-        spawnBtn.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        spawnBtn.Click += (s, e) => SpawnSelected(qty);
+        var addBtn = new Button { Text = "添加物品", Width = 100, BackColor = System.Drawing.Color.LightGreen };
+        addBtn.Click += (s, e) => SpawnSelected(qty);
 
-        tab.Controls.Add(search);
-        tab.Controls.Add(refreshBtn);
+        top.Controls.Add(search);
+        top.Controls.Add(refreshBtn);
+        top.Controls.Add(qty);
+        top.Controls.Add(addBtn);
+
+        // 物品列表占满剩余空间
+        _itemList.Dock = DockStyle.Fill;
+
         tab.Controls.Add(_itemList);
-        tab.Controls.Add(qty);
-        tab.Controls.Add(spawnBtn);
+        tab.Controls.Add(top);
         _tabs.TabPages.Add(tab);
     }
 
@@ -553,8 +594,8 @@ class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        // 防止误触关闭: 点击 X 只最小化, 不退出; 真正的退出走 OnFormClosed 之外 (进程被杀/系统关闭)
-        if (e.CloseReason == CloseReason.UserClosing)
+        // 只有点了"关闭修改器"按钮才真正退出; 其他关闭途径(Alt+F4等)一律拦截
+        if (!_allowExit)
         {
             e.Cancel = true;
             WindowState = FormWindowState.Minimized;
