@@ -281,6 +281,7 @@ class MainForm : Form
     const int VK_OEM3 = 0xC0; // 反引号 ` 键
 
     bool _allowExit = false;
+    System.Windows.Forms.Timer _gameWatcher = null;
 
     readonly int _port;
     readonly TabControl _tabs = new TabControl();
@@ -300,6 +301,23 @@ class MainForm : Form
 
         _tabs.Dock = DockStyle.Fill;
         Controls.Add(_tabs);
+
+        var hint = new Label
+        {
+            Text = "提示: 按下 ` 反引号键隐藏/显示窗口",
+            Dock = DockStyle.Top,
+            Height = 30,
+            TextAlign = ContentAlignment.MiddleCenter,
+            BackColor = Color.FromArgb(255, 246, 210),
+            ForeColor = Color.FromArgb(90, 60, 0),
+            Font = new Font(Font.FontFamily, 10.5f, FontStyle.Bold)
+        };
+        Controls.Add(hint);
+        Controls.SetChildIndex(hint, 0);
+
+        _gameWatcher = new System.Windows.Forms.Timer { Interval = 1500 };
+        _gameWatcher.Tick += (s, e) => CheckGameClosed();
+        _gameWatcher.Start();
 
         var closeBtn = new Button
         {
@@ -323,6 +341,18 @@ class MainForm : Form
         _allowExit = true;
         HostPoller.StopHost();
         Close();
+    }
+
+    // 游戏进程消失 → 自动关闭面板 (与点"关闭修改器"行为一致)
+    void CheckGameClosed()
+    {
+        try
+        {
+            Process[] procs = Process.GetProcessesByName("LostCastle2");
+            if (procs.Length == 0)
+                CloseTrainer();
+        }
+        catch { } // 权限/进程枚举异常时忽略, 下一次轮询再试
     }
 
     // ---------- HTTP 辅助 ----------
@@ -764,6 +794,7 @@ class MainForm : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        if (_gameWatcher != null) { _gameWatcher.Stop(); _gameWatcher.Dispose(); }
         UnregisterHotKey(Handle, HotKeyId);
         base.OnFormClosed(e);
     }
