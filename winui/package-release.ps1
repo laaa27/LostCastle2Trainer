@@ -44,8 +44,8 @@ Write-Host "[pkg] 拷贝 node_modules ($([Math]::Round((Get-ChildItem $root\node
 Copy-Item (Join-Path $root "node_modules") (Join-Path $stage "node_modules") -Recurse
 
 Write-Host "[pkg] 拷贝运行文件..."
-New-Item -ItemType Directory -Path (Join-Path $stage "winui") | Out-Null
-Copy-Item $exe (Join-Path $stage "winui")
+# 整个 winui 目录 (含 exe + WinPanel.cs 源码 + 构建/打包脚本)
+Copy-Item (Join-Path $PSScriptRoot ".") (Join-Path $stage "winui") -Recurse
 Copy-Item (Join-Path $root "host.js") $stage
 Copy-Item (Join-Path $root "start-trainer.bat") $stage
 Copy-Item (Join-Path $root "dist") (Join-Path $stage "dist") -Recurse
