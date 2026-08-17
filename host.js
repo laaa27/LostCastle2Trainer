@@ -1,11 +1,10 @@
 // host.js
-// 附加到 LostCastle2.exe, 加载编译后的 agent, 并启动本地网页面板
-// 面板: http://127.0.0.1:8899  (自动打开浏览器)
+// 附加到 LostCastle2.exe, 加载编译后的 agent, 并启动本地 HTTP 面板后端
+// 面板 UI 由 winui\WinPanel.exe (原生窗口) 提供
 const frida = require("frida");
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
-const { exec } = require("child_process");
 
 const TARGET = "LostCastle2.exe";
 const AGENT_FILE = path.join(__dirname, "dist", "agent.js");
@@ -482,7 +481,6 @@ const HTML = `<!DOCTYPE html>
         .then((port) => {
             const url = "http://127.0.0.1:" + port;
             console.log("[host] 修改面板已启动: " + url);
-            exec('start "" "' + url + '"');
         })
         .catch((err) => {
             console.error("[host] 无法启动网页面板: " + err.message);

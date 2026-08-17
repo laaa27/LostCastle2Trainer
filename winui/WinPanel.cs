@@ -261,7 +261,14 @@ class MainForm : Form
         }
         int k = i;
         while (k < json.Length && (char.IsDigit(json[k]) || json[k] == '-' || json[k] == '.' || json[k] == 'e' || json[k] == 'E')) k++;
-        return json.Substring(i, k - i);
+        if (k > i) return json.Substring(i, k - i);
+        // JSON 布尔/null 字面量: true / false / null
+        foreach (string lit in new string[] { "true", "false", "null" })
+        {
+            if (json.IndexOf(lit, i, StringComparison.Ordinal) == i)
+                return lit;
+        }
+        return "";
     }
 
     // 在数组元素中按字段=值定位并返回该元素的原始子串
@@ -391,7 +398,7 @@ class MainForm : Form
             string spawned = FindJsonField(resp, "spawned");
             string err = FindJsonField(resp, "error");
             string ok = FindJsonField(resp, "ok");
-            if (ok == "true" && err == null)
+            if (ok == "true" && (err == null || err == "null" || err.Length == 0))
                 MessageBox.Show("已掉落 " + hit.Name + " x" + (spawned ?? n.ToString()), "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Information);
             else
                 MessageBox.Show("生成失败: " + (err ?? "未知错误"), "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -542,6 +549,18 @@ class MainForm : Form
         if (m.Msg == WM_HOTKEY && (int)m.WParam == HotKeyId)
             Visible = !Visible;
         base.WndProc(ref m);
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        // 防止误触关闭: 点击 X 只最小化, 不退出; 真正的退出走 OnFormClosed 之外 (进程被杀/系统关闭)
+        if (e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            WindowState = FormWindowState.Minimized;
+            return;
+        }
+        base.OnFormClosing(e);
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
