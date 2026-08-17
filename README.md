@@ -40,8 +40,10 @@ powershell -ExecutionPolicy Bypass -File winui\build-ui.ps1
 
 # 3. 启动游戏（推荐无边框窗口化）并进入营地/存档界面
 
-# 4. 运行修改器（启动原生窗口面板，自动托管 host）
-#    直接双击「start-trainer.bat」即可，面板会自动编译缺失的 winui\WinPanel.exe
+# 4. 运行修改器
+#    直接双击 winui\WinPanel.exe 即可（无需任何命令行）。
+#    面板会自举：缺 node_modules 自动 npm install、缺 dist 自动编译，
+#    随后自动拉起 host.js 连接游戏并打开窗口。
 ```
 
 面板为 **Windows 原生窗口**（非浏览器），游戏中按 **\` 反引号键** 随时呼出 / 收起（置顶显示）。
@@ -57,11 +59,11 @@ powershell -ExecutionPolicy Bypass -File winui\build-ui.ps1
 ```
 src/agent.ts            # 核心: Frida 注入 agent (IL2CPP 操作 + 多版本探测层)
 host.js                 # 本地 HTTP 宿主 (附加游戏 + 提供面板 API)
-winui/WinPanel.cs       # C# 原生窗口面板 (WinForms, F12 全局热键 + 自动托管 host)
+winui/WinPanel.cs       # C# 原生窗口面板 (WinForms, ` 键全局热键 + 自动托管 host + 环境自举)
+winui/WinPanel.exe      # 编译产物: 直接双击启动修改器
 winui/build-ui.ps1      # 面板构建脚本 (系统自带 csc.exe, 零额外安装)
-start-trainer.bat       # 一键启动入口
 diag.js                 # 独立诊断/验证脚本 (attach -> 各 RPC -> 干净 detach)
-run-trainer.ps1         # 旧浏览器面板启动脚本 (host.js + 日志) 
+run-trainer.ps1         # 旧浏览器面板启动脚本 (host.js + 日志)
 ```
 
 ## 技术栈

@@ -15,6 +15,12 @@ static class WinPanel
     {
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+        try { EnsureEnvironment(); }
+        catch (Exception ex)
+        {
+            MessageBox.Show("环境准备失败: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return 1;
+        }
         int port;
         try { port = new HostPoller().EnsureHost(); }
         catch (Exception ex)
@@ -32,6 +38,109 @@ static class WinPanel
         Application.Run(new MainForm(port));
         return 0;
     }
+
+    // 自举: 确保 node / node_modules / dist\agent.js 就绪 (相当于旧 start-trainer.bat 的作用)
+    static void EnsureEnvironment()
+    {
+        string root = Directory.GetParent(Directory.GetParent(Application.ExecutablePath).FullName).FullName;
+        var st = new StatusForm();
+        st.Show();
+        st.SetText("正在检查环境...");
+        Application.DoEvents();
+        try
+        {
+            if (!NodeAvailable(root))
+                throw new Exception("未检测到 Node.js，请先安装 Node.js 后重试。");
+            if (!Directory.Exists(Path.Combine(root, "node_modules")))
+            {
+                st.SetText("首次运行，正在安装依赖 (npm install)，可能需要几分钟...");
+                Application.DoEvents();
+                RunCmd(root, "npm install");
+            }
+            if (!File.Exists(Path.Combine(root, "dist", "agent.js")))
+            {
+                st.SetText("首次运行，正在编译 agent (npm run build)...");
+                Application.DoEvents();
+                RunCmd(root, "npm run build");
+            }
+        }
+        finally
+        {
+            st.Close();
+        }
+    }
+
+    static bool NodeAvailable(string root)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("node", "--version")
+            {
+                WorkingDirectory = root,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using (var p = Process.Start(psi))
+            {
+                p.WaitForExit(8000);
+                return p.ExitCode == 0;
+            }
+        }
+        catch { return false; }
+    }
+
+    static void RunCmd(string root, string args)
+    {
+        var psi = new ProcessStartInfo("cmd.exe", "/c " + args)
+        {
+            WorkingDirectory = root,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        using (var p = Process.Start(psi))
+        {
+            p.OutputDataReceived += (s, e) => LogCmd(e.Data);
+            p.ErrorDataReceived += (s, e) => LogCmd(e.Data);
+            p.BeginOutputReadLine();
+            p.BeginErrorReadLine();
+            if (!p.WaitForExit(10 * 60 * 1000))
+            {
+                try { p.Kill(); } catch { }
+                throw new Exception(args + " 执行超时。");
+            }
+            if (p.ExitCode != 0)
+                throw new Exception(args + " 执行失败 (exit=" + p.ExitCode + ")，详见日志。");
+        }
+    }
+
+    static void LogCmd(string line)
+    {
+        if (line == null) return;
+        try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winpanel_build.log"), line + Environment.NewLine); } catch { }
+    }
+}
+
+// 简单状态窗口, 避免自举时看起来卡死
+class StatusForm : Form
+{
+    readonly Label _lb = new Label();
+    public StatusForm()
+    {
+        Text = "失落城堡2 修改器";
+        FormBorderStyle = FormBorderStyle.FixedToolWindow;
+        StartPosition = FormStartPosition.CenterScreen;
+        TopMost = true;
+        ClientSize = new Size(420, 50);
+        _lb.Dock = DockStyle.Fill;
+        _lb.TextAlign = ContentAlignment.MiddleLeft;
+        _lb.Padding = new Padding(8);
+        Controls.Add(_lb);
+    }
+    public void SetText(string s) { _lb.Text = s; }
 }
 
 class HostPoller
