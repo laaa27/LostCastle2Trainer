@@ -253,13 +253,121 @@ class MainForm : Form
         return FindJsonField(scope, field);
     }
 
-    // ---------- 物品区块 (Task 4 填充) ----------
+    // ---------- 物品区块 ----------
+    class ItemInfo
+    {
+        public string Id;
+        public string Name;
+        public string TypeLabel;
+        public string Display;
+    }
+    readonly System.Collections.Generic.List<ItemInfo> _allItems = new System.Collections.Generic.List<ItemInfo>();
+    readonly ListBox _itemList = new ListBox();
+    TextBox _itemSearch = null;
+
     void BuildItemTab()
     {
         var tab = new TabPage("物品");
-        var lbl = new Label { Text = "物品功能开发中", AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter };
-        tab.Controls.Add(lbl);
+        tab.Padding = new Padding(8);
+
+        var search = new TextBox { Width = 220, Top = 8, Left = 8 };
+        _itemSearch = search;
+        search.TextChanged += (s, e) => ApplyFilter();
+        var refreshBtn = new Button { Text = "刷新物品", Width = 80, Top = 8, Left = 236 };
+        refreshBtn.Click += (s, e) => RefreshItems();
+
+        _itemList.Left = 8;
+        _itemList.Top = 40;
+        _itemList.Width = 340;
+        _itemList.Height = 300;
+        _itemList.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+
+        var qty = new NumericUpDown { Left = 360, Top = 40, Width = 80, Minimum = 1, Maximum = 99, Value = 1 };
+        qty.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        var spawnBtn = new Button { Text = "生成掉落", Left = 360, Top = 70, Width = 80 };
+        spawnBtn.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        spawnBtn.Click += (s, e) => SpawnSelected(qty);
+
+        tab.Controls.Add(search);
+        tab.Controls.Add(refreshBtn);
+        tab.Controls.Add(_itemList);
+        tab.Controls.Add(qty);
+        tab.Controls.Add(spawnBtn);
         _tabs.TabPages.Add(tab);
+    }
+
+    void RefreshItems()
+    {
+        try
+        {
+            _allItems.Clear();
+            _itemList.Items.Clear();
+            string json = GetJson("/api/items");
+            // 形如 [{ "id":"...","name":"...","typeLabel":"..." }, ...] 逐项解析
+            int pos = 0;
+            while (pos < json.Length)
+            {
+                int start = json.IndexOf('{', pos);
+                if (start < 0) break;
+                int end = json.IndexOf('}', start);
+                if (end < 0) break;
+                string el = json.Substring(start, end - start + 1);
+                string id = FindJsonField(el, "id");
+                string name = FindJsonField(el, "name");
+                string type = FindJsonField(el, "typeLabel");
+                if (id != null)
+                {
+                    var it = new ItemInfo { Id = id, Name = name ?? "(无名称)", TypeLabel = type ?? "" };
+                    it.Display = it.Name + " [" + it.TypeLabel + "] " + it.Id;
+                    _allItems.Add(it);
+                }
+                pos = end + 1;
+            }
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("加载物品失败: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    void ApplyFilter()
+    {
+        _itemList.Items.Clear();
+        string kw = _itemSearch != null ? _itemSearch.Text.Trim().ToLowerInvariant() : "";
+        foreach (ItemInfo it in _allItems)
+        {
+            if (kw.Length == 0 || it.Display.ToLowerInvariant().IndexOf(kw) >= 0)
+                _itemList.Items.Add(it.Display);
+        }
+    }
+
+    void SpawnSelected(NumericUpDown qty)
+    {
+        if (_itemList.SelectedItem == null)
+        {
+            MessageBox.Show("请先在列表中选择一个物品", "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        string display = (string)_itemList.SelectedItem;
+        ItemInfo hit = _allItems.Find(it => it.Display == display);
+        if (hit == null) return;
+        int n = (int)qty.Value;
+        try
+        {
+            string resp = PostJson("/api/spawn", "{\"id\":\"" + hit.Id + "\",\"count\":" + n + "}");
+            string spawned = FindJsonField(resp, "spawned");
+            string err = FindJsonField(resp, "error");
+            string ok = FindJsonField(resp, "ok");
+            if (ok == "true" && err == null)
+                MessageBox.Show("已掉落 " + hit.Name + " x" + (spawned ?? n.ToString()), "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            else
+                MessageBox.Show("生成失败: " + (err ?? "未知错误"), "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("请求失败: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     // ---------- 属性区块 (Task 5 填充) ----------
