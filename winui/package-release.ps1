@@ -1,7 +1,8 @@
 # package-release.ps1 - 打包免环境 Release zip
 # 内容: 便携 node + 完整 node_modules + dist + host.js + WinPanel.exe + 启动器 + 文档
-# 用法: powershell -ExecutionPolicy Bypass -File winui\package-release.ps1 [-NodeVersion 22.14.0] [-Out <zip 路径>]
+# 用法: powershell -ExecutionPolicy Bypass -File winui\package-release.ps1 [-Version 1.1.0] [-NodeVersion 22.14.0] [-Out <zip 路径>]
 param(
+    [string]$Version = "1.1.0",
     [string]$NodeVersion = "22.14.0",
     [string]$Out = ""
 )
@@ -55,7 +56,7 @@ Copy-Item (Join-Path $root "README.md") $stage
 Copy-Item (Join-Path $root "CHANGELOG.md") $stage
 
 # 3. 压缩
-if (-not $Out) { $Out = Join-Path $root "LostCastle2Trainer-v$NodeVersion.zip" }
+if (-not $Out) { $Out = Join-Path $root "LostCastle2Trainer-v$Version.zip" }
 if (Test-Path $Out) { Remove-Item $Out }
 Write-Host "[pkg] 压缩 -> $Out"
 Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $Out -CompressionLevel Optimal

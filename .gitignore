@@ -13,6 +13,9 @@ winui/bin/
 # Logs
 *.log
 
+# Release 打包产物
+LostCastle2Trainer-v*.zip
+
 # IDE / OS
 .DS_Store
 Thumbs.db
