@@ -290,7 +290,7 @@ class MainForm : Form
     public MainForm(int port)
     {
         _port = port;
-        Text = "失落城堡2 修改器";
+        Text = "失落城堡2 修改器 | 按 ` 键隐藏/显示窗口";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(540, 560);
         MinimumSize = new Size(520, 400);
@@ -301,19 +301,6 @@ class MainForm : Form
 
         _tabs.Dock = DockStyle.Fill;
         Controls.Add(_tabs);
-
-        var hint = new Label
-        {
-            Text = "提示: 按下 ` 反引号键隐藏/显示窗口",
-            Dock = DockStyle.Top,
-            Height = 30,
-            TextAlign = ContentAlignment.MiddleCenter,
-            BackColor = Color.FromArgb(255, 246, 210),
-            ForeColor = Color.FromArgb(90, 60, 0),
-            Font = new Font(Font.FontFamily, 10.5f, FontStyle.Bold)
-        };
-        Controls.Add(hint);
-        Controls.SetChildIndex(hint, 0);
 
         _gameWatcher = new System.Windows.Forms.Timer { Interval = 1500 };
         _gameWatcher.Tick += (s, e) => CheckGameClosed();
