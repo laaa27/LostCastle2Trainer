@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -31,21 +32,33 @@ static class WinPanel
                 MessageBox.Show("环境准备失败: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
-            int port;
-            try { port = new HostPoller().EnsureHost(); }
-            catch (Exception ex)
+
+            // 立即显示面板(感知启动 ~0.5s), host 的探测/启动全部放后台线程
+            // (本机对已关闭端口做 TCP 连接约需 2s/端口, 同步探测会白白卡住窗口)
+            var form = new MainForm(-1);
+            var hostThread = new Thread(() =>
             {
+                int port = -1;
                 try
                 {
-                    File.AppendAllText(
-                        Path.Combine(Path.GetTempPath(), "winpanel_err.log"),
-                        DateTime.Now.ToString("HH:mm:ss") + " " + ex + Environment.NewLine);
+                    port = new HostPoller().EnsureHost();
+                    form.BeginInvoke((Action)(() => form.SetHostReady(port)));
                 }
-                catch { }
-                MessageBox.Show("无法启动 host.js: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return 1;
-            }
-            Application.Run(new MainForm(port));
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        File.AppendAllText(
+                            Path.Combine(Path.GetTempPath(), "winpanel_err.log"),
+                            DateTime.Now.ToString("HH:mm:ss") + " " + ex + Environment.NewLine);
+                    }
+                    catch { }
+                    form.BeginInvoke((Action)(() => form.HostFailed(ex.Message)));
+                }
+            });
+            hostThread.IsBackground = true;
+            hostThread.Start();
+            Application.Run(form);
         }
         return 0;
     }
@@ -267,14 +280,32 @@ class HostPoller
         return -1;
     }
 
-    int Probe()
+    public int Probe()
     {
         foreach (int port in Ports)
         {
+            // 本机对已关闭端口的 TCP 连接拒绝可能要等 ~2s, 先做一次快速连接探测跳过死端口
+            if (!IsListening(port)) continue;
             int hit = TryPort(port);
             if (hit > 0) return hit;
         }
         return -1;
+    }
+
+    // 快速 TCP 连接测试: 端口无监听者时立即返回 false (不等系统连接超时)
+    bool IsListening(int port)
+    {
+        try
+        {
+            using (var tcp = new TcpClient())
+            {
+                var ar = tcp.BeginConnect("127.0.0.1", port, null, null);
+                if (!ar.AsyncWaitHandle.WaitOne(200)) { tcp.Close(); return false; }
+                try { tcp.EndConnect(ar); return true; }
+                catch { return false; }
+            }
+        }
+        catch { return false; }
     }
 
     int TryPort(int port)
@@ -316,7 +347,7 @@ class MainForm : Form
     bool _allowExit = false;
     System.Windows.Forms.Timer _gameWatcher = null;
 
-    readonly int _port;
+    int _port;
     readonly TabControl _tabs = new TabControl();
     readonly TableLayoutPanel _resTable = new TableLayoutPanel();
 
@@ -357,8 +388,40 @@ class MainForm : Form
         BuildItemTab();
         BuildStatTab();
 
-        RefreshValues();
-        RefreshStats();
+        if (_port > 0)
+        {
+            RefreshValues();
+            RefreshStats();
+        }
+        else
+        {
+            // host 还在后台启动中: 标题栏提示, 数据区等就绪后刷新
+            Text = "失落城堡2 修改器 | 连接中... (按 ` 键隐藏/显示窗口)";
+        }
+    }
+
+    // 后台线程启动 host 成功后的回调 (UI 线程)
+    public void SetHostReady(int port)
+    {
+        _port = port;
+        Text = "失落城堡2 修改器 | 按 ` 键隐藏/显示窗口";
+        try
+        {
+            RefreshValues();
+            RefreshStats();
+        }
+        catch (Exception ex)
+        {
+            try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winpanel_err.log"), DateTime.Now.ToString("HH:mm:ss") + " 首次刷新失败: " + ex + Environment.NewLine); } catch { }
+        }
+    }
+
+    // 后台启动 host 失败回调 (UI 线程)
+    public void HostFailed(string message)
+    {
+        Text = "失落城堡2 修改器 | 连接失败";
+        MessageBox.Show("无法启动 host.js: " + message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        CloseTrainer();
     }
 
     void CloseTrainer()
