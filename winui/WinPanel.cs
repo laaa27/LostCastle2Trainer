@@ -101,6 +101,7 @@ class MainForm : Form
         BuildStatTab();
 
         RefreshValues();
+        RefreshStats();
     }
 
     // ---------- HTTP 辅助 ----------
@@ -370,13 +371,139 @@ class MainForm : Form
         }
     }
 
-    // ---------- 属性区块 (Task 5 填充) ----------
+    // ---------- 属性区块 ----------
+    readonly Panel _statArea = new Panel();
+    readonly System.Collections.Generic.Dictionary<string, Label> _statLbls = new System.Collections.Generic.Dictionary<string, Label>();
+    readonly System.Collections.Generic.Dictionary<string, TextBox> _statInputs = new System.Collections.Generic.Dictionary<string, TextBox>();
+
     void BuildStatTab()
     {
         var tab = new TabPage("属性");
-        var lbl = new Label { Text = "属性功能开发中", AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter };
-        tab.Controls.Add(lbl);
+        tab.Padding = new Padding(8);
+
+        var refreshBtn = new Button { Text = "刷新属性", Width = 90 };
+        refreshBtn.Click += (s, e) => RefreshStats();
+        var resetBtn = new Button { Text = "重置为装备数值", Width = 120 };
+        resetBtn.Click += (s, e) => ResetStats();
+        refreshBtn.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        resetBtn.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+
+        _statArea.Left = 0;
+        _statArea.Width = tab.ClientSize.Width;
+        _statArea.Top = 40;
+        _statArea.Height = Math.Max(100, tab.ClientSize.Height - 48);
+        _statArea.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        _statArea.AutoScroll = true;
+
+        tab.Controls.Add(_statArea);
+        tab.Controls.Add(refreshBtn);
+        tab.Controls.Add(resetBtn);
+        refreshBtn.Location = new Point(8, 8);
+        resetBtn.Location = new Point(100, 8);
         _tabs.TabPages.Add(tab);
+    }
+
+    void RefreshStats()
+    {
+        try
+        {
+            string json = GetJson("/api/stats");
+            // 解析 [{name,label,value,max}, ...]
+            var rows = new System.Collections.Generic.List<string[]>();
+            int pos = 0;
+            while (pos < json.Length)
+            {
+                int start = json.IndexOf('{', pos);
+                if (start < 0) break;
+                int end = json.IndexOf('}', start);
+                if (end < 0) break;
+                string el = json.Substring(start, end - start + 1);
+                string name = FindJsonField(el, "name");
+                string label = FindJsonField(el, "label");
+                string value = FindJsonField(el, "value");
+                string max = FindJsonField(el, "max");
+                if (name != null) rows.Add(new string[] { name, label, value, max });
+                pos = end + 1;
+            }
+            EnsureStatRows(rows);
+            foreach (string[] row in rows)
+            {
+                Label cur;
+                if (_statLbls.TryGetValue(row[0], out cur))
+                {
+                    string maxTxt = row[3] != null ? " / 上限: " + row[3] : "";
+                    cur.Text = "当前: " + (row[2] == null ? "?" : row[2]) + maxTxt;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("读取属性失败: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    void EnsureStatRows(System.Collections.Generic.List<string[]> rows)
+    {
+        if (_statLbls.Count > 0) return;
+        _statArea.SuspendLayout();
+        int y = 4;
+        foreach (string[] row in rows)
+        {
+            string name = row[0], label = row[1];
+            var lb = new Label { Text = label, Left = 4, Top = y, Width = 90, AutoSize = false };
+            var cur = new Label { Text = "...", Left = 96, Top = y, Width = 150, AutoSize = false };
+            var input = new TextBox { Left = 248, Top = y - 2, Width = 80 };
+            var btn = new Button { Text = "修改", Left = 334, Top = y - 2, Width = 50 };
+            btn.Click += (s, e) => SetStat(name, input.Text);
+            _statArea.Controls.Add(lb);
+            _statArea.Controls.Add(cur);
+            _statArea.Controls.Add(input);
+            _statArea.Controls.Add(btn);
+            _statLbls[name] = cur;
+            _statInputs[name] = input;
+            y += 32;
+        }
+        _statArea.ResumeLayout();
+    }
+
+    void SetStat(string name, string text)
+    {
+        try
+        {
+            double val = double.Parse(text.Trim());
+            string resp = PostJson("/api/setstat", "{\"name\":\"" + name + "\",\"value\":" + val.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}");
+            string ok = FindJsonField(resp, "ok");
+            if (ok == "true")
+            {
+                RefreshStats();
+            }
+            else
+            {
+                MessageBox.Show("修改失败: " + (FindJsonField(resp, "error") ?? "未知错误"), "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("输入无效或请求失败: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    void ResetStats()
+    {
+        try
+        {
+            string resp = PostJson("/api/resetstats", "{}");
+            string ok = FindJsonField(resp, "ok");
+            string changed = FindJsonField(resp, "changed");
+            if (ok == "true")
+                MessageBox.Show("已重置属性" + (changed != null ? ": " + changed : ""), "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            else
+                MessageBox.Show("重置失败: " + (FindJsonField(resp, "error") ?? "未知错误"), "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("请求失败: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     protected override void WndProc(ref Message m)
