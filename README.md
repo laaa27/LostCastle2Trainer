@@ -87,7 +87,7 @@ winui/WinPanel.exe      # 编译产物: 直接双击启动修改器 (优先用�
 winui/build-ui.ps1      # 面板构建脚本 (系统自带 csc.exe, 零额外安装)
 winui/package-release.ps1  # 一键打包免环境 Release zip (内置便携 node + node_modules)
 diag.js                 # 独立诊断/验证脚本 (attach -> 各 RPC -> 干净 detach)
-run-trainer.ps1         # 旧浏览器面板启动脚本 (host.js + 日志)
+run-trainer.ps1         # 诊断用启动脚本 (带日志运行 host.js)
 ```
 
 ## 技术栈

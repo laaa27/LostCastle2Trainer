@@ -1,5 +1,5 @@
 # package-release.ps1 - 打包免环境 Release zip
-# 内容: 便携 node + 完整 node_modules + dist + host.js + WinPanel.exe + 启动器 + 文档
+# 内容: 便携 node + 完整 node_modules + dist + host.js + WinPanel.exe + 文档
 # 用法: powershell -ExecutionPolicy Bypass -File winui\package-release.ps1 [-Version 1.1.0] [-NodeVersion 22.14.0] [-Out <zip 路径>]
 param(
     [string]$Version = "1.1.0",
@@ -47,7 +47,6 @@ Write-Host "[pkg] 拷贝运行文件..."
 # 整个 winui 目录 (含 exe + WinPanel.cs 源码 + 构建/打包脚本)
 Copy-Item (Join-Path $PSScriptRoot ".") (Join-Path $stage "winui") -Recurse
 Copy-Item (Join-Path $root "host.js") $stage
-Copy-Item (Join-Path $root "start-trainer.bat") $stage
 Copy-Item (Join-Path $root "dist") (Join-Path $stage "dist") -Recurse
 Copy-Item (Join-Path $root "src") (Join-Path $stage "src") -Recurse
 Copy-Item (Join-Path $root "package.json") $stage

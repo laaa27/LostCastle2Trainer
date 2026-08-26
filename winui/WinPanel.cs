@@ -85,7 +85,7 @@ static class WinPanel
     [DllImport("user32.dll")]
     static extern bool SetForegroundWindow(IntPtr hWnd);
 
-    // 自举: 确保 node / node_modules / dist\agent.js 就绪 (相当于旧 start-trainer.bat 的作用)
+    // 自举: 确保 node / node_modules / dist\agent.js 就绪 (首次运行免命令行)
     static void EnsureEnvironment()
     {
         string root = Directory.GetParent(Directory.GetParent(Application.ExecutablePath).FullName).FullName;
