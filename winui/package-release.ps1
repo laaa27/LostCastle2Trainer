@@ -2,7 +2,7 @@
 # 内容: 便携 node + 完整 node_modules + dist + host.js + WinPanel.exe + 文档
 # 用法: powershell -ExecutionPolicy Bypass -File winui\package-release.ps1 [-Version 1.1.0] [-NodeVersion 22.14.0] [-Out <zip 路径>]
 param(
-    [string]$Version = "1.1.0",
+    [string]$Version = "1.2.0",
     [string]$NodeVersion = "22.14.0",
     [string]$Out = ""
 )

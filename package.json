@@ -1,6 +1,6 @@
 {
   "name": "lostcastle2trainer",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "失落城堡2 单机修改器 (Frida 注入 + 本地网页面板)",
   "main": "host.js",
   "scripts": {
