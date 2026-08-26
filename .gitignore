@@ -23,3 +23,5 @@ Thumbs.db
 .vscode/
 .reasonix/
 *.lnk
+# Local portable node (packaging source)
+node/
