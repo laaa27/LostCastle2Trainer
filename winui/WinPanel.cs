@@ -53,7 +53,7 @@ static class WinPanel
                             DateTime.Now.ToString("HH:mm:ss") + " " + ex + Environment.NewLine);
                     }
                     catch { }
-                    form.BeginInvoke((Action)(() => form.HostFailed(ex.Message)));
+                    form.BeginInvoke((Action)(() => form.HostFailed(ex)));
                 }
             });
             hostThread.IsBackground = true;
@@ -241,8 +241,11 @@ class HostPoller
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
                 CreateNoWindow = true
             };
+            lock (_hostLines) _hostLines.Clear();
             proc = Process.Start(psi);
             _ownedProc = proc;
             proc.BeginOutputReadLine();
@@ -257,7 +260,11 @@ class HostPoller
             };
             proc.ErrorDataReceived += delegate (object s, DataReceivedEventArgs a)
             {
-                if (a.Data != null) try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winpanel_host_err.log"), a.Data + Environment.NewLine); } catch { }
+                if (a.Data != null)
+                {
+                    lock (_hostLines) _hostLines.Add(a.Data);
+                    try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "winpanel_host_err.log"), a.Data + Environment.NewLine); } catch { }
+                }
             };
         }
         catch (Exception e)
@@ -270,6 +277,7 @@ class HostPoller
             while (DateTime.Now < deadline)
             {
                 Thread.Sleep(500);
+                if (GameMissingReported()) throw new GameNotRunningException();
                 p = Probe();
                 if (p > 0) return p;
                 // host 若落到随机端口, 从输出日志解析实际端口
@@ -278,6 +286,17 @@ class HostPoller
             }
         }
         throw new Exception("host.js 30s 内未就绪");
+    }
+
+    // 扫描 host 输出中的 GAME_NOT_FOUND 标记 (ASCII, 不受管道编码影响)
+    static bool GameMissingReported()
+    {
+        lock (_hostLines)
+        {
+            foreach (string l in _hostLines)
+                if (l != null && l.Contains("GAME_NOT_FOUND")) return true;
+        }
+        return false;
     }
 
     // 从 host 的 stdout 里解析 "http://127.0.0.1:<port>" 实际监听端口并探测
@@ -358,6 +377,12 @@ class TimedWebClient : WebClient
     }
 }
 
+// host 报告游戏未运行时快速失败, 面板据此弹出友好提示而非通用错误
+class GameNotRunningException : Exception
+{
+    public GameNotRunningException() : base("游戏未运行") { }
+}
+
 class MainForm : Form
 {
     const int WM_HOTKEY = 0x0312;
@@ -365,6 +390,7 @@ class MainForm : Form
     const int VK_OEM3 = 0xC0; // 反引号 ` 键
 
     bool _allowExit = false;
+    bool _restarting = false;
     System.Windows.Forms.Timer _gameWatcher = null;
 
     int _port;
@@ -395,11 +421,22 @@ class MainForm : Form
         _gameWatcher.Tick += (s, e) => CheckGameClosed();
         _gameWatcher.Start();
 
+        var restartBtn = new Button
+        {
+            Text = "修改失败？点我重启试试",
+            Dock = DockStyle.Bottom,
+            Height = 32,
+            ForeColor = Color.Green
+        };
+        restartBtn.Click += (s, e) => RestartHost();
+        Controls.Add(restartBtn);
+
         var closeBtn = new Button
         {
             Text = "关闭修改器",
             Dock = DockStyle.Bottom,
-            Height = 32
+            Height = 32,
+            ForeColor = Color.Red
         };
         closeBtn.Click += (s, e) => CloseTrainer();
         Controls.Add(closeBtn);
@@ -437,11 +474,45 @@ class MainForm : Form
     }
 
     // 后台启动 host 失败回调 (UI 线程)
-    public void HostFailed(string message)
+    public void HostFailed(Exception ex)
     {
+        if (ex is GameNotRunningException)
+        {
+            MessageBox.Show("未检测到《失落城堡2》游戏进程。\n\n请先启动游戏并进入营地/存档界面，再打开修改器。", "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            CloseTrainer();
+            return;
+        }
         Text = "失落城堡2 修改器 | 连接失败";
-        MessageBox.Show("无法启动 host.js: " + message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        MessageBox.Show("无法启动 host.js: " + ex.Message, "失落城堡2 修改器", MessageBoxButtons.OK, MessageBoxIcon.Error);
         CloseTrainer();
+    }
+
+    // 重启 host 以应对异常状态: 停掉旧 host 进程, 重新拉起并刷新数据
+    void RestartHost()
+    {
+        if (_restarting) return;
+        _restarting = true;
+        Text = "失落城堡2 修改器 | 正在重启 host...";
+        var t = new Thread(() =>
+        {
+            Exception err = null;
+            int port = -1;
+            try
+            {
+                HostPoller.StopHost();
+                Thread.Sleep(600);
+                port = new HostPoller().EnsureHost();
+            }
+            catch (Exception ex) { err = ex; }
+            BeginInvoke((Action)(() =>
+            {
+                _restarting = false;
+                if (err != null) HostFailed(err);
+                else SetHostReady(port);
+            }));
+        });
+        t.IsBackground = true;
+        t.Start();
     }
 
     void CloseTrainer()
@@ -451,9 +522,10 @@ class MainForm : Form
         Close();
     }
 
-    // 游戏进程消失 → 自动关闭面板 (与点"关闭修改器"行为一致)
+    // 游戏进程消失 → 自动关闭面板 (仅在已连接过后生效; 未连接阶段的失败交给 HostFailed 提示)
     void CheckGameClosed()
     {
+        if (_port <= 0) return;
         try
         {
             Process[] procs = Process.GetProcessesByName("LostCastle2");

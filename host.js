@@ -76,7 +76,7 @@ function listenWithFallback(server, ports) {
         process.exit(1);
     }
     if (!proc) {
-        console.error("[host] 未找到进程 " + TARGET + " , 请先启动游戏");
+        console.error("[host] GAME_NOT_FOUND 未找到进程 " + TARGET + " , 请先启动游戏");
         process.exit(1);
     }
     console.log("[host] 附加到 " + TARGET + " (PID " + proc.pid + ") ...");
